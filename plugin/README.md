@@ -14,6 +14,31 @@ DSH Host 插件：让模型直接操作正在运行的 Xcode。底层使用 Appl
 
 模型只看到 5 个高层工具，而不是 Xcode MCP 的 54 个原始工具，减少上下文占用。
 
+## 安装
+
+包名：`dsh-xcode`。发布到 npm 后：
+
+```text
+plugin_manager install_bundle
+  target: dsh-xcode@0.1.0
+```
+
+从本地 tarball 安装：
+
+```text
+plugin_manager install_bundle
+  target: /absolute/path/to/dist/dsh-xcode-0.1.0.tgz
+```
+
+本地开发时可以直接 link 包目录：
+
+```text
+plugin_manager install_bundle
+  target: /absolute/path/to/dsh-xcode/plugin
+```
+
+安装后调用 `xcode_context`（`action: "status"`）确认 Xcode MCP 连接正常。
+
 ## 依赖
 
 - macOS + Xcode 26.3 或更高版本（本机验证：Xcode 27.1 / 27A9275）
@@ -122,3 +147,7 @@ cd plugin && npm run check      # 等价于 node scripts/check-schemas.mjs
 - 每个工具都有非空 `description`；schema 可无损 JSON 序列化，注解（`description`/`title`）类型正确。
 
 失败时以非零码退出并指出具体工具与路径；这条脚本守住的就是“schema 退化成属性表 → 每个 turn 400”这个回归。
+
+## License
+
+MIT © 2026 Carl. See [LICENSE](LICENSE).

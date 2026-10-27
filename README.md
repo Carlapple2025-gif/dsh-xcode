@@ -18,6 +18,8 @@
 | [plugin/index.js](plugin/index.js) | 插件实现：Xcode MCP 客户端 + 5 个工具 |
 | [plugin/scripts/check-schemas.mjs](plugin/scripts/check-schemas.mjs) | 零依赖 schema 冒烟检查 |
 | [plugin/README.md](plugin/README.md) | 使用说明、首次授权、限制 |
+| [plugin/LICENSE](plugin/LICENSE) | MIT |
+| [PUBLISHING.md](PUBLISHING.md) | 打包、发布、安装到其他 profile 的流程 |
 | [Fixtures/XcodeAgentDemo/](Fixtures/XcodeAgentDemo/) | 真实 macOS SwiftUI 测试工程，用于端到端验证 |
 
 ## 工具
@@ -97,11 +99,28 @@ Invalid schema for function 'xcode_build':
 
 ## 安装与重载
 
-当前 `desktop` profile 已通过 `plugin_manager` 以 link 方式安装：
+当前 `desktop` profile 以 link 方式安装的是新的正式包名：
 
 ```text
-@local/dsh-xcode -> /Users/carl_li/Dev/personal/proj-swift/dsh-xcode/plugin
+dsh-xcode -> /Users/carl_li/Dev/personal/proj-swift/dsh-xcode/plugin
 ```
+
+本仓库同时产出可分发的 npm tarball。构建：
+
+```bash
+cd plugin
+npm pack --pack-destination dist
+```
+
+得到 `dist/dsh-xcode-0.1.0.tgz`。安装到其他 profile：
+
+```text
+plugin_manager install_bundle
+  target: /absolute/path/to/dist/dsh-xcode-0.1.0.tgz
+```
+
+发布到 npm 后也可以直接安装 `dsh-xcode@0.1.0`。完整发布流程见
+[PUBLISHING.md](PUBLISHING.md)。
 
 源码修改后，在本会话中把 `include:dsh-xcode` 禁用再启用即可重新注册；本次验证就是这样做的。重启 DSH 后也会重新加载。
 

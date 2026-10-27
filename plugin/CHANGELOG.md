@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to this package are documented here.
+
+## 0.1.0 — 2026-10-27
+
+Initial public package.
+
+- Adds five model-facing tools: `xcode_context`, `xcode_build`, `xcode_test`,
+  `xcode_run`, and `xcode_simulator`.
+- Drives Xcode through Apple's official `xcrun mcpbridge` (Xcode MCP) and
+  `simctl`; no private Xcode APIs, project-file rewriting, or UI scripting.
+- Supports opening workspaces, building, testing, running, console/OSLog
+  reading, SwiftUI Preview rendering, LLDB commands, and simulator control.
+- Serializes Xcode MCP operations to protect Xcode's single active
+  scheme/destination and launch session.
+- Registers standard object-rooted JSON Schema for every tool and validates
+  schemas at plugin load; includes a dependency-free schema check.
+- Verified against Xcode 27.1 (27A9275), Xcode MCP `xcode-tools` 25320,
+  protocol `2025-06-18`.

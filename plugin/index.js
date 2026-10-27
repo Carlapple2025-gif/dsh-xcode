@@ -6,7 +6,7 @@
  * for simulator management. No private Xcode APIs, project-file rewriting, or
  * UI scripting.
  *
- * @module @local/dsh-xcode
+ * @module dsh-xcode
  */
 
 import { access, mkdir, stat } from 'node:fs/promises'

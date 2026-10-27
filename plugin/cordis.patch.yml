@@ -1,4 +1,4 @@
 - insert:
     - id: dsh-xcode
-      name: '@local/dsh-xcode'
+      name: 'dsh-xcode'
       config: {}
