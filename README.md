@@ -101,10 +101,20 @@ Invalid schema for function 'xcode_build':
 
 公开分发入口：
 
+- npm：[dsh-xcode](https://www.npmjs.com/package/dsh-xcode)
 - 仓库：https://github.com/Carlapple2025-gif/dsh-xcode
 - Release：https://github.com/Carlapple2025-gif/dsh-xcode/releases/tag/v0.1.0
 - 直接下载：
   https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.1.0/dsh-xcode-0.1.0.tgz
+
+从 npm 安装：
+
+```text
+plugin_manager install_bundle
+  target: dsh-xcode@0.1.0
+```
+
+或下载 tarball：
 
 ```bash
 curl -L -o dsh-xcode-0.1.0.tgz \
@@ -133,8 +143,7 @@ cd plugin
 npm pack --pack-destination dist
 ```
 
-发布到 npm 后也可以直接安装 `dsh-xcode@0.1.0`。完整发布流程见
-[PUBLISHING.md](PUBLISHING.md)。
+完整发布流程见 [PUBLISHING.md](PUBLISHING.md)。
 
 源码修改后，在本会话中把 `include:dsh-xcode` 禁用再启用即可重新注册；本次验证就是这样做的。重启 DSH 后也会重新加载。
 
