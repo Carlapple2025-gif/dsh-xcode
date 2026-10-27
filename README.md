@@ -99,24 +99,38 @@ Invalid schema for function 'xcode_build':
 
 ## 安装与重载
 
-当前 `desktop` profile 以 link 方式安装的是新的正式包名：
+公开分发入口：
+
+- 仓库：https://github.com/Carlapple2025-gif/dsh-xcode
+- Release：https://github.com/Carlapple2025-gif/dsh-xcode/releases/tag/v0.1.0
+- 直接下载：
+  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.1.0/dsh-xcode-0.1.0.tgz
+
+```bash
+curl -L -o dsh-xcode-0.1.0.tgz \
+  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.1.0/dsh-xcode-0.1.0.tgz
+shasum -a 256 dsh-xcode-0.1.0.tgz
+# 4c46cd9328b7807da3b253687ea8f67086963aa2442885c1042c27ab5ce883eb
+```
+
+安装到 DSH profile：
+
+```text
+plugin_manager install_bundle
+  target: /absolute/path/to/dsh-xcode-0.1.0.tgz
+```
+
+当前 `desktop` profile 则以 link 方式安装正式包名，便于开发：
 
 ```text
 dsh-xcode -> /Users/carl_li/Dev/personal/proj-swift/dsh-xcode/plugin
 ```
 
-本仓库同时产出可分发的 npm tarball。构建：
+本仓库也可以自行产出 npm tarball：
 
 ```bash
 cd plugin
 npm pack --pack-destination dist
-```
-
-得到 `dist/dsh-xcode-0.1.0.tgz`。安装到其他 profile：
-
-```text
-plugin_manager install_bundle
-  target: /absolute/path/to/dist/dsh-xcode-0.1.0.tgz
 ```
 
 发布到 npm 后也可以直接安装 `dsh-xcode@0.1.0`。完整发布流程见
