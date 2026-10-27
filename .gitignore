@@ -1,0 +1,17 @@
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcresult
+
+.build/
+.clang-cache/
+.swiftpm-cache/
+.swiftpm-config/
+.swiftpm-security/
+.tmp/
+
+node_modules/
+dist/
+*.tgz
+*.log

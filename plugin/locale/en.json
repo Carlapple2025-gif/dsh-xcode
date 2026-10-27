@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Xcode Pilot",
+    "description": "Drive the open Xcode workspace: inspect targets, build, test, run, preview, debug, and control Simulators through Apple's official Xcode MCP bridge and simctl."
+  }
+}

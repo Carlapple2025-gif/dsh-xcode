@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-xcode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drive the open Xcode workspace through Apple's official Xcode MCP bridge and simctl.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "scripts": {
+    "check": "node scripts/check-schemas.mjs"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "scripts/check-schemas.mjs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Xcode Pilot">
+  <defs>
+    <linearGradient id="bg" x1="24" y1="16" x2="232" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1730"/>
+      <stop offset="1" stop-color="#111C33"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="58" y1="88" x2="196" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5AA9FF"/>
+      <stop offset="1" stop-color="#8B7CFF"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="172" y1="54" x2="210" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#66E3FF"/>
+      <stop offset="1" stop-color="#7CFFC4"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
+  <g opacity=".45" stroke="#2A4A74" stroke-width="1">
+    <path d="M0 64h256M0 128h256M0 192h256"/>
+    <path d="M64 0v256M128 0v256M192 0v256"/>
+  </g>
+  <circle cx="196" cy="60" r="38" fill="#0E2B4B" opacity=".55"/>
+  <path d="M64 88l38 40-38 40" fill="none" stroke="url(#beam)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M122 168h66" fill="none" stroke="#E9F4FF" stroke-width="16" stroke-linecap="round"/>
+  <path d="M170 74l10 10 22-30" fill="none" stroke="url(#spark)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <circle cx="72" cy="206" r="6" fill="#66E3FF"/>
+  <circle cx="96" cy="206" r="6" fill="#5AA9FF" opacity=".7"/>
+  <circle cx="120" cy="206" r="6" fill="#8B7CFF" opacity=".5"/>
+</svg>

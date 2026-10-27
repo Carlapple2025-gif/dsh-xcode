@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Xcode 智能体",
+    "description": "直接操作已打开的 Xcode 工作区：查看目标、构建、测试、运行、预览、调试，并通过 Apple 官方 Xcode MCP 与 simctl 控制模拟器。"
+  }
+}
