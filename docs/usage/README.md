@@ -104,6 +104,22 @@ private framework; if no approval event exists, state that explicitly.
 
 This is usually an agent/product-policy finding, not a dsh-xcode iteration item.
 
+## Visual verification
+
+SwiftUI Preview is component-level evidence. It does not prove how a view
+composes with the real window, menu bar, notch, or other apps.
+
+Record the actual verification method:
+
+- Preview snapshot only
+- rendered app window screenshot
+- full-screen capture including system chrome
+- user acceptance / correction
+
+If the user later reports a visual gap after a successful Preview, that is a
+verification-method gap, not automatically a plugin bug. Capture the real-window
+step before changing the plugin.
+
 ## Negative controls
 
 A successful case with light Xcode usage is a **negative control**. Record it,
