@@ -11,8 +11,10 @@ the final "write a case card" turn is part of the same case.
 | `xcode_build` | **pass** | 4/4 builds; warning probe returned warning | validated |
 | Warning schema hotfix | **pass** | default severity returned 1 warning, no schema error | validated |
 | Preview | **pass** | 2 final states rendered | validated |
-| `xcode_test` (macOS) | **pass** | 6 calls, 12 runs, final 5/5 | validated |
-| `xcode_run` non-preview | **not covered** | 0 calls | collect |
+| `xcode_test` (macOS) | **pass** | probe: 6 calls, 12 runs, final 5/5; real app: 6/6 after P1 | validated |
+| `xcode_run` non-preview | **partial** | real app launch + console pass; debugger not covered | collect debugger |
+| Clean / Release configuration / analyze | **unsupported** | plugin has no clean/configuration/analyze; CLI used | candidate |
+| Real-app release audit | **partial** | P1 test target + notification fixed; P0 signing blocked | app work, not plugin |
 | `xcode_simulator` end-to-end | **blocked** | zero runtimes; list empty, rest domain errors | environment |
 | Swift Package input | **unsupported** | 6/7 xcode_* calls rejected at validation layer | candidate |
 | Archive / export / signing | **blocked + shell-only** | no identity/team; no plugin tools | candidate |
@@ -45,6 +47,17 @@ the final "write a case card" turn is part of the same case.
 5. **Stale `xcode_test list`** — first list returned 3 cached tests; after
    `xcode_build buildForTesting` it returned the correct 5. Add a refresh hint.
 
+### Real-project audit
+
+- A real macOS menu-bar app confirmed `xcode_build`/`xcode_run` (launch + console)
+  and `xcode_test` (6/6 after adding a test target).
+- The same audit found missing `clean`, Release configuration, `analyze`,
+  `archive`/`export`/signing-status, and console filtering/arguments.
+- P1 test target + notification state were fixed in the app; P0 Developer ID
+  signing and notarization remain blocked by credentials.
+- CI, `PrivacyInfo.xcprivacy`, and version checks were added to the app repo;
+  these are app hygiene, not dsh-xcode capabilities.
+
 ### Negative controls
 
 - macOS simulator work is not evidence for simulator quality.
@@ -53,8 +66,9 @@ the final "write a case card" turn is part of the same case.
 
 ## Next data targets
 
-1. `xcode_run` with a real macOS app: launch, console, stop, debugger.
+1. `xcode_run` debugger (and post-stop console retention) on a real macOS app.
 2. A second Swift Package project, to confirm the unsupported-input pattern.
 3. Simulator after a runtime is installed, if that becomes a supported setup.
 4. Archive/export with a real development team, if the user wants that path.
 5. A second greenfield project using `xcode_project` to confirm repeatability.
+6. `clean` / Release configuration / analyze as a candidate plugin batch.
