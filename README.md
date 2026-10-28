@@ -106,7 +106,7 @@ Invalid schema for function 'xcode_build':
 
 公开分发入口：
 
-- npm：[dsh-xcode](https://www.npmjs.com/package/dsh-xcode)（registry 当前为 0.1.0；0.1.1 hotfix 与 0.2.0 的 npm 发布待认证）
+- npm：[dsh-xcode](https://www.npmjs.com/package/dsh-xcode)（0.1.1 hotfix 与 0.2.0 已发布，latest = 0.2.0）
 - 仓库：https://github.com/Carlapple2025-gif/dsh-xcode
 - Release：https://github.com/Carlapple2025-gif/dsh-xcode/releases/tag/v0.2.0
 - 直接下载：
