@@ -1,6 +1,6 @@
 {
   "name": "dsh-xcode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Drive the open Xcode workspace through Apple's official Xcode MCP bridge and simctl.",
   "type": "module",
   "license": "MIT",

@@ -29,9 +29,9 @@
 |---|---|
 | `xcode_context` | 状态、列出/打开工作区、查看 scheme/target/destination/test plan、切换当前选择 |
 | `xcode_project` | 列出/筛选官方 Xcode 工程模板、查看模板选项、从模板创建并打开 `.xcodeproj` |
-| `xcode_build` | 构建当前 scheme，返回结构化错误/警告 + 完整日志路径 |
-| `xcode_test` | 列出测试、跑全部或指定测试，返回计数与失败详情 |
-| `xcode_run` | 构建并运行、停止、读 console、渲染 SwiftUI Preview、执行 LLDB 命令 |
+| `xcode_build` | 构建当前 scheme；可选 `configuration` / `clean` / `destination`（native xcodebuild），返回结构化错误/警告 + 完整日志路径 |
+| `xcode_test` | 列出测试、跑全部或指定测试；无 test target 时返回 0 用例而不是硬错误 |
+| `xcode_run` | 构建并运行、停止、读 console（支持 process/subsystem 过滤、stop 前缓存）、渲染 SwiftUI Preview、执行 LLDB 命令 |
 | `xcode_simulator` | `simctl` 列出/启动/关闭模拟器，安装/启动/终止 App，截图，打开 URL |
 
 ## 本次实测环境
@@ -57,6 +57,11 @@
 | `xcode_build` 编译失败用例 | 通过；返回 `success:false`、1 个 error，包含文件、行号和消息 |
 | `xcode_project templates` | 通过；列出 52 个官方工程模板，过滤 macOS/App 后返回 9 个，并显示模板选项 |
 | `xcode_project create` | 通过；创建 `ProjectToolSmoke`（SwiftUI + Swift Testing），自动打开 workspace 并构建成功（0.2.0） |
+| `xcode_build` Release | 通过；`configuration="Release"` + native xcodebuild，16.8s，0 error/warning（0.3.0） |
+| `xcode_build` clean | 通过；`clean=true` + Debug，14.8s，0 error/warning（0.3.0） |
+| `xcode_test` 无测试目标 | 通过；Islet 返回 `TESTS PASSED — 0 tests`，不再硬错误（0.3.0） |
+| `xcode_run` stop 后 console | 通过；stop 前缓存，stop 后仍能读取（0.3.0） |
+| `xcode_run` console 过滤 | 通过；`process="WebContent"` 过滤后只保留匹配行（0.3.0） |
 | `xcode_test list` | 通过；发现 3 个测试 |
 | `xcode_test some` | 通过；`1 passed, 0 failed`，返回 XCTest 结果路径 |
 | `xcode_run run` | 通过；App 启动，PID 11003 |
@@ -106,33 +111,33 @@ Invalid schema for function 'xcode_build':
 
 公开分发入口：
 
-- npm：[dsh-xcode](https://www.npmjs.com/package/dsh-xcode)（0.1.1 hotfix 与 0.2.0 已发布，latest = 0.2.0）
+- npm：[dsh-xcode](https://www.npmjs.com/package/dsh-xcode)（latest 0.2.0；0.3.0 待 npm 认证后发布）
 - 仓库：https://github.com/Carlapple2025-gif/dsh-xcode
-- Release：https://github.com/Carlapple2025-gif/dsh-xcode/releases/tag/v0.2.0
+- Release：https://github.com/Carlapple2025-gif/dsh-xcode/releases/tag/v0.3.0
 - 直接下载：
-  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.2.0/dsh-xcode-0.2.0.tgz
+  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.3.0/dsh-xcode-0.3.0.tgz
 
 从 GitHub Release 安装（当前推荐）：
 
 ```bash
-curl -L -o dsh-xcode-0.2.0.tgz \
-  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.2.0/dsh-xcode-0.2.0.tgz
-shasum -a 256 dsh-xcode-0.2.0.tgz
-# ce8ab2266f47c8f03eff3ac8bfd3e2363e58267915a4e24cb7108eb49530436c
+curl -L -o dsh-xcode-0.3.0.tgz \
+  https://github.com/Carlapple2025-gif/dsh-xcode/releases/download/v0.3.0/dsh-xcode-0.3.0.tgz
+shasum -a 256 dsh-xcode-0.3.0.tgz
+# 12c489fcdfe14a5d110aff1837e41ade8385b27c2eb2a4861627c4eaf66db8c3
 ```
 
 安装到 DSH profile：
 
 ```text
 plugin_manager install_bundle
-  target: /absolute/path/to/dsh-xcode-0.2.0.tgz
+  target: /absolute/path/to/dsh-xcode-0.3.0.tgz
 ```
 
 npm 发布后也可以直接安装：
 
 ```text
 plugin_manager install_bundle
-  target: dsh-xcode@0.2.0
+  target: dsh-xcode@0.3.0
 ```
 
 当前 `desktop` profile 则以 link 方式安装正式包名，便于开发：

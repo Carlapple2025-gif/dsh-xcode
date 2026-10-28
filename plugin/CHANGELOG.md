@@ -2,6 +2,24 @@
 
 All notable changes to this package are documented here.
 
+## 0.3.0 — 2026-10-28
+
+Release-gate and console fixes.
+
+- `xcode_test` now treats a scheme with no test target as an empty suite:
+  `action="all"` returns `success:true`, `counts.total=0`, and a note instead of
+  a hard "scheme is not testable" error. `some` handles the same domain error.
+- `xcode_run action="stop"` snapshots up to 500 console lines before stopping;
+  `action="console"` falls back to that snapshot when Xcode expires the launch
+  session.
+- `xcode_run` console adds `process` and `subsystem` filters. The process filter
+  also matches the process label embedded in OSLog content, which is needed for
+  WebKit's `WebContent` noise.
+- `xcode_build` adds `configuration`, `clean`, and `destination`. Supplying
+  `configuration` or `clean` uses a native `xcodebuild` path with a temp
+  DerivedData; normal builds still use Xcode MCP and the active configuration.
+- Adds schema regression assertions for the new parameters and output fields.
+
 ## 0.2.0 — 2026-10-28
 
 Minimal project creation.

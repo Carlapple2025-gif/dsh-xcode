@@ -8,9 +8,9 @@ DSH Host 插件：让模型直接操作正在运行的 Xcode。底层使用 Appl
 |---|---|
 | `xcode_context` | 查看 Xcode/MCP/权限状态；列出、打开工作区；查看 scheme、target、run destination、test plan；切换当前 scheme / destination / test plan |
 | `xcode_project` | 列出/筛选官方 Xcode 工程模板，查看模板选项；从模板创建 `.xcodeproj` 并自动打开 |
-| `xcode_build` | 用 Xcode 自己的构建系统构建当前 scheme，返回结构化错误/警告和完整日志路径 |
-| `xcode_test` | 列出测试；运行全部测试或指定 `targetName + testIdentifier`；返回通过/失败计数、失败详情、完整结果路径 |
-| `xcode_run` | 构建并运行 App；停止；读取 stdout/stderr/OSLog；渲染 SwiftUI `#Preview` 为 PNG；执行 LLDB 命令 |
+| `xcode_build` | 用 Xcode 构建当前 scheme；可选 `configuration` / `clean` / `destination`（native xcodebuild），返回结构化错误/警告和完整日志路径 |
+| `xcode_test` | 列出测试；运行全部或指定测试；无 test target 时返回 0 用例而不是硬错误 |
+| `xcode_run` | 运行/停止 App；console 支持 process/subsystem 过滤，stop 前缓存最后 500 行；渲染 `#Preview`；执行 LLDB 命令 |
 | `xcode_simulator` | 用 `simctl` 列出、启动、关闭模拟器，安装/启动/终止 App，截图，打开 URL |
 
 模型只看到 6 个高层工具，而不是 Xcode MCP 的 54 个原始工具，减少上下文占用。
@@ -21,14 +21,14 @@ DSH Host 插件：让模型直接操作正在运行的 Xcode。底层使用 Appl
 
 ```text
 plugin_manager install_bundle
-  target: dsh-xcode@0.2.0
+  target: dsh-xcode@0.3.0
 ```
 
 从 GitHub Release tarball 安装：
 
 ```text
 plugin_manager install_bundle
-  target: /absolute/path/to/dist/dsh-xcode-0.2.0.tgz
+  target: /absolute/path/to/dist/dsh-xcode-0.3.0.tgz
 ```
 
 本地开发时可以直接 link 包目录：
@@ -93,7 +93,8 @@ DSH model
 
 - Xcode MCP 工具调用使用官方 `tools/call` 协议；本插件只做白名单和结果整形。
 - 所有走 MCP 的工具在插件内串行执行。Xcode 的 active scheme/destination、构建流和 launch session 都是单实例状态；串行队列避免并行 `status`/`build` 让官方 bridge 丢失关联响应（实测并发时会 60s 超时，加入队列后通过）。
-- `xcodebuild -version` 仅用于状态展示；构建/测试/运行全部交给 Xcode MCP，确保使用 Xcode 当前 scheme、destination 和测试计划。
+- `xcodebuild -version` 仅用于状态展示；普通构建/测试/运行交给 Xcode MCP，确保使用 Xcode 当前 scheme、destination 和测试计划。
+- 显式传 `xcode_build.configuration` 或 `clean` 时改用 native `xcodebuild`，DerivedData 放在系统临时目录；这是为了支持 Release/全量构建，不改变普通构建路径。
 - `simctl` 用于模拟器生命周期；Xcode 的 Run 按钮流程仍由 `xcode_run` 负责。
 - `xcode_run action="preview"` 接受绝对路径；插件会把它换算成 Xcode 工程内相对路径（例如 `XcodeAgentDemo/ContentView.swift`），再交给 `RenderPreview`。
 - 工具输出有上限，完整构建日志/测试结果保留在 Xcode 返回的路径中。

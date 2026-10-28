@@ -9,9 +9,10 @@
  * @module dsh-xcode
  */
 
-import { access, mkdir, readFile, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 
 export const name = 'dsh-xcode'
@@ -149,7 +150,7 @@ class XcodeMCP {
         {
           protocolVersion: MCP_PROTOCOL,
           capabilities: {},
-          clientInfo: { name: 'dsh-xcode', version: '0.2.0' },
+          clientInfo: { name: 'dsh-xcode', version: '0.3.0' },
         },
         { timeoutMs: MCP_START_TIMEOUT_MS, signal },
       )
@@ -547,6 +548,64 @@ async function runCommand(ctx, argv, exec, { timeoutMs = 60_000, cwd = HOMEDIR, 
 
 async function simctl(ctx, exec, argv, options = {}) {
   return runCommand(ctx, [XCRUN, 'simctl', ...argv], exec, options)
+}
+
+/**
+ * Like runCommand, but preserves stdout/stderr and the exit code for commands
+ * whose failure is a normal result (xcodebuild diagnostics).
+ */
+async function runCommandCapture(ctx, argv, exec, { timeoutMs = 60_000, cwd = HOMEDIR, maxBytes = 8_000_000 } = {}) {
+  const controller = new AbortController()
+  let timedOut = false
+  let cancelled = false
+  const onAbort = () => {
+    cancelled = true
+    controller.abort()
+  }
+  if (exec.signal) exec.signal.addEventListener('abort', onAbort, { once: true })
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    const handle = ctx.subprocess.spawn({
+      argv,
+      cwd,
+      stdio: {
+        stdin: 'ignore',
+        stdout: { maxBytes, spill: { maxBytes: maxBytes * 2 } },
+        stderr: { maxBytes: 2_000_000, spill: { maxBytes: 4_000_000 } },
+      },
+      graceMs: 2_000,
+      signal: controller.signal,
+      env: {
+        ...process.env,
+        PATH: process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin',
+        LC_ALL: process.env.LC_ALL || 'en_US.UTF-8',
+      },
+    })
+    let outcome
+    try {
+      outcome = await handle.done
+    } catch (error) {
+      outcome = { exitCode: null, signal: null, error }
+    }
+    const stdout = handle.collected.stdout?.readFrom(0)?.text ?? ''
+    const stderr = handle.collected.stderr?.readFrom(0)?.text ?? ''
+    if (timedOut) {
+      throw new Error(`Command timed out after ${Math.round(timeoutMs / 1000)}s: ${argv.join(' ')}`)
+    }
+    if (cancelled) throw new Error('Command cancelled.')
+    return {
+      stdout,
+      stderr,
+      exitCode: outcome.exitCode,
+      signal: outcome.signal,
+    }
+  } finally {
+    clearTimeout(timer)
+    if (exec.signal) exec.signal.removeEventListener('abort', onAbort)
+  }
 }
 
 function simulatorDevices(value) {
@@ -1089,7 +1148,136 @@ function makeContextTool(ctx, mcp) {
   }
 }
 
-function makeBuildTool(mcp) {
+async function workspacePathFor(mcp, workspace, signal) {
+  if (workspace.path) return workspace.path
+  const listed = await mcp.callTool('XcodeListWorkspaces', {}, { timeoutMs: 60_000, signal })
+  const found = parseWorkspaces(listed).find((entry) => entry.id === workspace.id)
+  if (!found?.path) {
+    throw new Error(`Cannot resolve the filesystem path for workspace ${workspace.id}. Pass workspace=<absolute path>.`)
+  }
+  return found.path
+}
+
+function parseXcodebuildIssues(text) {
+  const issues = []
+  const seen = new Set()
+  for (const line of String(text).split(/\r?\n/)) {
+    let match = line.match(/^(.+?):(\d+)(?::(\d+))?:\s*(error|warning|note):\s*(.*)$/i)
+    if (!match) match = line.match(/^\s*(error|warning|note):\s*(.*)$/i)
+    if (!match) continue
+    const severity = match[4] ? match[4].toLowerCase() : match[1].toLowerCase()
+    const message = match[5] ?? match[2]
+    const filePath = match[4] ? match[1] : undefined
+    const lineNumber = match[4] ? Number(match[2]) : undefined
+    const key = `${severity}|${filePath ?? ''}|${lineNumber ?? ''}|${message}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    issues.push({
+      severity: severity === 'note' ? 'remark' : severity,
+      message,
+      ...(filePath ? { filePath } : {}),
+      ...(Number.isFinite(lineNumber) ? { lineNumber } : {}),
+    })
+    if (issues.length >= MAX_ISSUES * 4) break
+  }
+  return issues
+}
+
+async function runNativeBuild(ctx, mcp, workspace, args, exec) {
+  const projectPath = await workspacePathFor(mcp, workspace, exec.signal)
+  const schemes = await mcp.callTool(
+    'XcodeListSchemes',
+    { workspaceIdentifier: workspace.id },
+    { timeoutMs: 60_000, signal: exec.signal },
+  )
+  const activeScheme =
+    schemes.activeSchemeName ??
+    (schemes.schemes ?? []).find((scheme) => scheme.isActive)?.name ??
+    (schemes.schemes ?? [])[0]?.name
+  if (!activeScheme) throw new Error('Xcode returned no active scheme for this workspace.')
+
+  const configuration = String(args.configuration || 'Debug')
+  const clean = args.clean === true
+  const buildForTesting = args.buildForTesting === true
+  const derivedDataPath = resolve(
+    tmpdir(),
+    'dsh-xcode-derived',
+    createHash('sha1').update(projectPath).digest('hex').slice(0, 12),
+    'DerivedData',
+  )
+  await mkdir(dirname(derivedDataPath), { recursive: true })
+  const flag = /\.xcworkspace$/i.test(projectPath) ? '-workspace' : '-project'
+  const argv = [
+    XCRUN,
+    'xcodebuild',
+    flag,
+    projectPath,
+    '-scheme',
+    activeScheme,
+    '-configuration',
+    configuration,
+    '-derivedDataPath',
+    derivedDataPath,
+  ]
+  if (args.destination) argv.push('-destination', String(args.destination))
+  argv.push(...(clean ? ['clean'] : []), buildForTesting ? 'build-for-testing' : 'build')
+
+  const started = Date.now()
+  const result = await runCommandCapture(ctx, argv, exec, {
+    timeoutMs: BUILD_TIMEOUT_MS,
+    cwd: dirname(projectPath),
+  })
+  const elapsedTime = Math.round(((Date.now() - started) / 1000) * 10) / 10
+  const output = `${result.stdout}\n${result.stderr}`.trim()
+  const issues = parseXcodebuildIssues(output)
+  const errors = issues.filter((issue) => issue.severity === 'error').slice(0, MAX_ISSUES)
+  const warnings = issues.filter((issue) => issue.severity === 'warning').slice(0, MAX_ISSUES)
+  const success = result.exitCode === 0
+  let logPath
+  try {
+    logPath = resolve(tmpdir(), `dsh-xcode-build-${Date.now()}.log`)
+    await writeFile(logPath, `${output}\n`, 'utf8')
+  } catch {
+    logPath = undefined
+  }
+  const buildResult = `xcodebuild ${clean ? 'clean ' : ''}${buildForTesting ? 'build-for-testing' : 'build'} ${success ? 'succeeded' : `failed (exit ${result.exitCode ?? result.signal ?? 'unknown'})`}.`
+  const lines = [
+    `${success ? 'BUILD SUCCEEDED' : 'BUILD FAILED'}${Number.isFinite(elapsedTime) ? ` in ${elapsedTime}s` : ''}`,
+    `Workspace: ${workspaceHeader(workspace)}`,
+    `Configuration: ${configuration}${clean ? ' · clean' : ''}${args.destination ? ` · ${args.destination}` : ''}`,
+    `Channel: xcodebuild`,
+    `Result: ${buildResult}`,
+    `Errors: ${errors.length}${errors.length >= MAX_ISSUES ? '+' : ''} · Warnings: ${warnings.length}${warnings.length >= MAX_ISSUES ? '+' : ''}`,
+  ]
+  if (errors.length) {
+    lines.push('Errors:')
+    for (const issue of errors.slice(0, 20)) lines.push(`- ${formatIssue(issue)}`)
+  }
+  if (warnings.length) {
+    lines.push('Warnings:')
+    for (const issue of warnings.slice(0, 12)) lines.push(`- ${formatIssue(issue)}`)
+  }
+  if (logPath) lines.push(`Full log: ${logPath}`)
+  lines.push(`DerivedData: ${derivedDataPath}`)
+  const notes = ['Native xcodebuild path used because clean/configuration was requested.']
+  return {
+    summary: lines.join('\n'),
+    success,
+    buildResult,
+    elapsedTime,
+    configuration,
+    clean,
+    channel: 'xcodebuild',
+    errors,
+    warnings,
+    issues: issues.slice(0, MAX_ISSUES),
+    logPath,
+    workspace: workspaceHeader(workspace),
+    notes,
+  }
+}
+
+function makeBuildTool(ctx, mcp) {
   return {
     name: 'xcode_build',
     description:
@@ -1103,6 +1291,21 @@ function makeBuildTool(mcp) {
       buildForTesting: {
         type: 'boolean',
         description: 'Also build test targets that a normal build would skip. Default: false.',
+      },
+      configuration: {
+        type: 'string',
+        description:
+          'Build configuration, for example Debug or Release. Supplying this uses the native xcodebuild path instead of Xcode’s active configuration.',
+      },
+      clean: {
+        type: 'boolean',
+        description:
+          'Clean before building. Uses the native xcodebuild path; configuration defaults to Debug when omitted.',
+      },
+      destination: {
+        type: 'string',
+        description:
+          'Optional xcodebuild -destination string, for example platform=macOS. Used only with configuration/clean.',
       },
       severity: {
         type: 'string',
@@ -1124,6 +1327,9 @@ function makeBuildTool(mcp) {
         success: { type: 'boolean', required: true },
         buildResult: { type: 'string', required: true },
         elapsedTime: { type: 'number' },
+        configuration: { type: 'string' },
+        clean: { type: 'boolean' },
+        channel: { type: 'string' },
         errors: {
           type: 'array',
           items: {
@@ -1183,6 +1389,9 @@ function makeBuildTool(mcp) {
     },
     async execute(args, exec) {
       const workspace = await resolveWorkspace(mcp, args, exec.signal)
+      if (args.clean === true || (typeof args.configuration === 'string' && args.configuration.trim())) {
+        return runNativeBuild(ctx, mcp, workspace, args, exec)
+      }
       const build = await mcp.callTool(
         'BuildProject',
         {
@@ -1410,6 +1619,17 @@ function makeTestTool(mcp) {
       }
 
       if (action === 'all') {
+        // Match `list` semantics: a scheme without a test target is an empty
+        // suite, not a failed test run. CI should not turn "0 tests" into red.
+        const preflight = await mcp.callTool(
+          'GetTestList',
+          { workspaceIdentifier: workspace.id },
+          { timeoutMs: 120_000, signal: exec.signal },
+        )
+        const preflightTotal = preflight.counts?.total ?? (preflight.tests?.length ?? 0)
+        if (preflightTotal === 0) {
+          return emptyTestResult(action, workspace, preflight)
+        }
         const value = await mcp.callTool(
           'RunAllTests',
           { workspaceIdentifier: workspace.id },
@@ -1428,16 +1648,47 @@ function makeTestTool(mcp) {
           }
           return { targetName: String(test.targetName), testIdentifier: String(test.testIdentifier) }
         })
-        const value = await mcp.callTool(
-          'RunSomeTests',
-          { workspaceIdentifier: workspace.id, tests },
-          { timeoutMs: TEST_TIMEOUT_MS, signal: exec.signal },
-        )
-        return testRunResult(value, action, workspace)
+        try {
+          const value = await mcp.callTool(
+            'RunSomeTests',
+            { workspaceIdentifier: workspace.id, tests },
+            { timeoutMs: TEST_TIMEOUT_MS, signal: exec.signal },
+          )
+          return testRunResult(value, action, workspace)
+        } catch (error) {
+          if (/not testable|no tests? found|scheme .* not testable/i.test(String(error.message))) {
+            return emptyTestResult(action, workspace, {}, 'The scheme has no test target; the selected tests did not run.')
+          }
+          throw error
+        }
       }
 
       throw new Error(`Unknown xcode_test action: ${action}`)
     },
+  }
+}
+
+function emptyTestResult(action, workspace, value, note = 'The active scheme has no tests to run.') {
+  return {
+    summary: [
+      `TESTS PASSED — 0 tests (0 total)`,
+      `Scheme: ${value?.schemeName ?? workspace.id}${value?.activeTestPlanName ? ` · Test plan: ${value.activeTestPlanName}` : ''}`,
+      `Note: ${note}`,
+    ].join('\n'),
+    action,
+    success: true,
+    schemeName: value?.schemeName,
+    activeTestPlanName: value?.activeTestPlanName,
+    counts: {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      expectedFailures: 0,
+      notRun: 0,
+    },
+    results: [],
+    notes: [note],
   }
 }
 
@@ -1493,6 +1744,7 @@ function testRunResult(value, action, workspace) {
 }
 
 function makeRunTool(mcp) {
+  const consoleCache = new Map()
   return {
     name: 'xcode_run',
     description:
@@ -1534,6 +1786,16 @@ function makeRunTool(mcp) {
         type: 'boolean',
         description: 'For console: include OSLog subsystem/category/process metadata.',
       },
+      process: {
+        type: 'string',
+        description:
+          'For console: only keep OSLog units whose processName contains this string. Forces metadata collection.',
+      },
+      subsystem: {
+        type: 'string',
+        description:
+          'For console: only keep OSLog units whose subsystem contains this string. Forces metadata collection.',
+      },
       launchSessionReference: {
         type: 'string',
         description: 'For console: a specific launch session reference; omit for the latest.',
@@ -1573,6 +1835,8 @@ function makeRunTool(mcp) {
         output: { type: 'string' },
         launchSessionInfo: { type: 'string' },
         consoleTruncated: { type: 'boolean' },
+        consoleCached: { type: 'boolean' },
+        notes: { type: 'array', items: { type: 'string' } },
         previewPath: { type: 'string' },
         displayName: { type: 'string' },
         previewErrors: { type: 'array', items: { type: 'string' } },
@@ -1624,35 +1888,95 @@ function makeRunTool(mcp) {
       }
 
       if (action === 'stop') {
+        // Keep a bounded console snapshot before stopping: Xcode can discard
+        // the launch session immediately, which is exactly when crash logs are
+        // most useful.
+        let cachedConsole
+        try {
+          cachedConsole = await mcp.callTool(
+            'GetConsoleOutput',
+            {
+              workspaceIdentifier: workspace.id,
+              outputType: 'all',
+              tailLimit: 500,
+              includeMetadata: true,
+            },
+            { timeoutMs: 30_000, signal: exec.signal },
+          )
+          consoleCache.set(workspace.id, { value: cachedConsole, cachedAt: Date.now() })
+        } catch {
+          // No live session; stopping is still useful.
+        }
         const value = await mcp.callTool(
           'StopProject',
           { workspaceIdentifier: workspace.id },
           { timeoutMs: 60_000, signal: exec.signal },
         )
         return {
-          summary: `${value.stopResult ?? 'Stopped.'}${value.processIdentifier ? ` (PID ${value.processIdentifier})` : ''}`,
+          summary: [
+            `${value.stopResult ?? 'Stopped.'}${value.processIdentifier ? ` (PID ${value.processIdentifier})` : ''}`,
+            cachedConsole ? 'Saved up to 500 console lines from before stop; use action="console" to read them.' : null,
+          ].filter(Boolean).join('\n'),
           action,
           success: true,
           processIdentifier: value.processIdentifier,
+          consoleCached: Boolean(cachedConsole),
+          notes: cachedConsole ? ['Console snapshot captured before stop.'] : [],
         }
       }
 
       if (action === 'console') {
         const tailLimit = Math.min(Math.max(Number(args.tailLimit) || 200, 1), 2_000)
-        const value = await mcp.callTool(
-          'GetConsoleOutput',
-          {
-            workspaceIdentifier: workspace.id,
-            outputType: args.outputType || 'all',
-            tailLimit,
-            ...(args.pattern ? { pattern: args.pattern } : {}),
-            ...(Number.isFinite(Number(args.contextLines)) ? { contextLines: Number(args.contextLines) } : {}),
-            ...(args.includeMetadata === true ? { includeMetadata: true } : {}),
-            ...(args.launchSessionReference ? { launchSessionReference: args.launchSessionReference } : {}),
-          },
-          { timeoutMs: 120_000, signal: exec.signal },
-        )
-        const units = Array.isArray(value.units) ? value.units : []
+        const processFilter = args.process ? String(args.process).toLowerCase() : ''
+        const subsystemFilter = args.subsystem ? String(args.subsystem).toLowerCase() : ''
+        const hasFilter = Boolean(processFilter || subsystemFilter)
+        let value
+        let consoleCached = false
+        const notes = []
+        try {
+          value = await mcp.callTool(
+            'GetConsoleOutput',
+            {
+              workspaceIdentifier: workspace.id,
+              outputType: args.outputType || 'all',
+              tailLimit,
+              ...(args.pattern ? { pattern: args.pattern } : {}),
+              ...(Number.isFinite(Number(args.contextLines)) ? { contextLines: Number(args.contextLines) } : {}),
+              ...(args.includeMetadata === true || hasFilter ? { includeMetadata: true } : {}),
+              ...(args.launchSessionReference ? { launchSessionReference: args.launchSessionReference } : {}),
+            },
+            { timeoutMs: 120_000, signal: exec.signal },
+          )
+          consoleCache.set(workspace.id, { value, cachedAt: Date.now() })
+        } catch (error) {
+          const cached = consoleCache.get(workspace.id)
+          if (!cached) {
+            if (/launch session|find launch/i.test(String(error.message))) {
+              throw new Error(
+                `${error.message}\n\nXcode has expired the launch session. Call xcode_run action="console" before action="stop", or rerun the app; the plugin now snapshots up to 500 lines before stop.`,
+              )
+            }
+            throw error
+          }
+          value = cached.value
+          consoleCached = true
+          notes.push('Console came from the bounded snapshot captured before stop.')
+        }
+        const rawUnits = consoleCached
+          ? (Array.isArray(value.units) ? value.units : []).slice(-tailLimit)
+          : Array.isArray(value.units)
+            ? value.units
+            : []
+        const units = hasFilter
+          ? rawUnits.filter((unit) => {
+              if (unit.kind !== 'oslog') return true
+              const metadata = unit.metadata ?? {}
+              const processHaystack = `${metadata.processName ?? ''}\n${unit.content ?? ''}`.toLowerCase()
+              if (processFilter && !processHaystack.includes(processFilter)) return false
+              if (subsystemFilter && !String(metadata.subsystem ?? '').toLowerCase().includes(subsystemFilter)) return false
+              return true
+            })
+          : rawUnits
         const lines = []
         for (const unit of units) {
           const prefix = unit.kind === 'oslog' ? `[oslog${unit.severity ? `:${unit.severity}` : ''}] ` : ''
@@ -1661,10 +1985,14 @@ function makeRunTool(mcp) {
         }
         const outputText = lines.join('\n')
         const summaryLines = [
-          `Console: ${value.launchSessionInfo ?? 'launch session'}`,
-          `Lines: ${value.totalCount ?? units.length}${value.truncated ? ` (truncated to last ${tailLimit})` : ''}`,
+          `Console: ${value.launchSessionInfo ?? 'launch session'}${consoleCached ? ' (cached before stop)' : ''}`,
+          `Lines: ${units.length}${hasFilter ? ` of ${value.totalCount ?? rawUnits.length} after filter` : ''}${value.truncated ? ` (truncated to last ${tailLimit})` : ''}`,
+          hasFilter
+            ? `Filter: process=${JSON.stringify(args.process ?? '')} subsystem=${JSON.stringify(args.subsystem ?? '')}`
+            : null,
           outputText || '(no console output yet)',
-        ]
+          ...notes,
+        ].filter(Boolean)
         return {
           summary: clip(summaryLines.join('\n'), MAX_TEXT),
           action,
@@ -1672,6 +2000,8 @@ function makeRunTool(mcp) {
           output: clip(outputText, MAX_TEXT),
           launchSessionInfo: value.launchSessionInfo,
           consoleTruncated: Boolean(value.truncated),
+          consoleCached,
+          notes,
         }
       }
 
@@ -2342,7 +2672,7 @@ export function apply(ctx) {
   const tools = [
     makeContextTool(ctx, mcp),
     makeProjectTool(mcp),
-    makeBuildTool(mcp),
+    makeBuildTool(ctx, mcp),
     makeTestTool(mcp),
     makeRunTool(mcp),
     makeSimulatorTool(ctx),

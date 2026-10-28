@@ -216,6 +216,28 @@ for (const key of ['errors', 'warnings']) {
   }
 }
 
+// Regression: v0.3.0 release-gate and console operations.
+const buildParams = tools.find((tool) => tool.name === 'xcode_build')?.parameters?.properties
+for (const key of ['configuration', 'clean', 'destination']) {
+  if (!isRecord(buildParams?.[key])) {
+    fail(`tools.xcode_build.parameters.${key}`, 'must be declared for release/clean builds.')
+  }
+}
+const runParams = tools.find((tool) => tool.name === 'xcode_run')?.parameters?.properties
+for (const key of ['process', 'subsystem']) {
+  if (!isRecord(runParams?.[key])) {
+    fail(`tools.xcode_run.parameters.${key}`, 'must be declared for console filtering.')
+  }
+}
+const runOutput = tools.find((tool) => tool.name === 'xcode_run')?.output?.schema?.properties
+if (!isRecord(runOutput?.consoleCached) || runOutput.consoleCached.type !== 'boolean') {
+  fail('tools.xcode_run.output.schema.properties.consoleCached', 'must declare cached-console output.')
+}
+const testOutput = tools.find((tool) => tool.name === 'xcode_test')?.output?.schema?.properties
+if (!isRecord(testOutput?.notes) || testOutput.notes.type !== 'array') {
+  fail('tools.xcode_test.output.schema.properties.notes', 'must declare empty-suite notes.')
+}
+
 const width = Math.max(...tools.map((tool) => tool.name.length), 11)
 for (const tool of tools) {
   const root = tool.parameters?.type ?? 'missing'

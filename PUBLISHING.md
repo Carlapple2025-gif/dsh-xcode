@@ -31,7 +31,7 @@ dist/dsh-xcode-<version>.tgz
 Inspect it without installing:
 
 ```bash
-tar -tzf dist/dsh-xcode-0.2.0.tgz
+tar -tzf dist/dsh-xcode-0.3.0.tgz
 ```
 
 The tarball must contain `package.json`, `index.js`, `cordis.patch.yml`,
@@ -44,14 +44,14 @@ In DSH:
 
 ```text
 plugin_manager install_bundle
-  target: /absolute/path/to/dist/dsh-xcode-0.2.0.tgz
+  target: /absolute/path/to/dist/dsh-xcode-0.3.0.tgz
 ```
 
 or install from the npm registry after publishing:
 
 ```text
 plugin_manager install_bundle
-  target: dsh-xcode@0.2.0
+  target: dsh-xcode@0.3.0
 ```
 
 Then call `xcode_context` with `action: "status"`.
@@ -73,8 +73,8 @@ it has no dependencies and no install scripts.
 
 ```bash
 git add .
-git commit -m "release: v0.2.0"
-git tag -a v0.2.0 -m "dsh-xcode v0.2.0"
+git commit -m "release: v0.3.0"
+git tag -a v0.3.0 -m "dsh-xcode v0.3.0"
 git push origin main --tags
 ```
 
