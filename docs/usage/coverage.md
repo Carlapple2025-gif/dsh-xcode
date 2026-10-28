@@ -11,9 +11,10 @@ the final "write a case card" turn is part of the same case.
 | `xcode_build` | **pass** | 4/4 builds; warning probe returned warning | validated |
 | Warning schema hotfix | **pass** | default severity returned 1 warning, no schema error | validated |
 | Preview | **pass** | 2 final states rendered | validated |
-| `xcode_test` (macOS) | **pass** | probe: 6 calls, 12 runs, final 5/5; real app: 6/6 after P1 | validated |
-| `xcode_run` non-preview | **partial** | real app launch + console pass; debugger not covered | collect debugger |
-| Clean / Release configuration / analyze | **unsupported** | plugin has no clean/configuration/analyze; CLI used | candidate |
+| `xcode_test` (macOS) | **pass** | probe: 6 calls, 12 runs, final 5/5; real app: 6/6; no-test scheme: 0-case success | v0.3.0 |
+| `xcode_run` non-preview | **partial** | launch + console pass; cached console and process filter pass; debugger not covered | collect debugger |
+| Clean / Release configuration | **pass** | native xcodebuild path: Release 16.8s, clean Debug 14.8s, 0 warnings | v0.3.0 |
+| Analyze | **unsupported** | still no plugin tool; CLI only | candidate |
 | Real-app release audit | **partial** | P1 test target + notification fixed; P2 CI/privacy/version added; P0 signing blocked | app work, not plugin |
 | CI / privacy / version | **pass** | CI green on Xcode 26.6; PrivacyInfo in bundle; app=plugin=0.2.3, schema 1 | app release hygiene |
 | `xcode_simulator` end-to-end | **blocked** | zero runtimes; list empty, rest domain errors | environment |
@@ -52,8 +53,9 @@ the final "write a case card" turn is part of the same case.
 
 - A real macOS menu-bar app confirmed `xcode_build`/`xcode_run` (launch + console)
   and `xcode_test` (6/6 after adding a test target).
-- The same audit found missing `clean`, Release configuration, `analyze`,
-  `archive`/`export`/signing-status, and console filtering/arguments.
+- v0.3.0 added clean/Release configuration, console snapshot/filter, and
+  empty-test semantics. `analyze`, archive/export/signing-status, and launch
+  arguments still need a later batch.
 - P1 test target + notification state were fixed in the app; P0 Developer ID
   signing and notarization remain blocked by credentials.
 - CI, `PrivacyInfo.xcprivacy`, and version checks were added to the app repo;
@@ -73,4 +75,4 @@ the final "write a case card" turn is part of the same case.
 3. Simulator after a runtime is installed, if that becomes a supported setup.
 4. Archive/export with a real development team, if the user wants that path.
 5. A second greenfield project using `xcode_project` to confirm repeatability.
-6. `clean` / Release configuration / analyze as a candidate plugin batch.
+6. `analyze` / archive / export as the next release-tooling batch.
