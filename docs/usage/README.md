@@ -1,5 +1,8 @@
 # Usage cases
 
+See [coverage.md](coverage.md) for the current validation matrix and remaining
+uncovered surfaces.
+
 This directory keeps **real field traces** of `dsh-xcode` in use. Its purpose is
 to preserve evidence for future iteration without committing private project
 data.
