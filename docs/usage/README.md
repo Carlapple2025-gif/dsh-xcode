@@ -88,6 +88,22 @@ Count only the new turns (events after the seed) and keep the parent case link.
 The same project refactored twice must not inflate the evidence for a candidate
 iteration.
 
+## Safety boundary
+
+Record whether the task crossed a public-API boundary:
+
+- private frameworks or undocumented system services
+- Accessibility control of other apps
+- entitlements or system privacy permissions
+- login items, background services, or persistent modifications
+- App Store / notarization implications
+
+A successful build and screenshot do not make a private-API solution safe or
+shippable. The DSH approval policy may not gate a code-level decision to call a
+private framework; if no approval event exists, state that explicitly.
+
+This is usually an agent/product-policy finding, not a dsh-xcode iteration item.
+
 ## When to iterate
 
 Do not change the plugin for every one-off project need. Use this order:
