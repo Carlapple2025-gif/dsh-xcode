@@ -104,6 +104,20 @@ private framework; if no approval event exists, state that explicitly.
 
 This is usually an agent/product-policy finding, not a dsh-xcode iteration item.
 
+## Negative controls
+
+A successful case with light Xcode usage is a **negative control**. Record it,
+but do not use it to justify new capabilities.
+
+Examples:
+
+- a single incremental `xcode_build` on an existing project
+- an icon/asset task with no project or build changes
+- a task that never calls `xcode_run`, `xcode_test`, or `xcode_simulator`
+
+Say what the case does **not** prove. This prevents a successful one-off from
+turning into speculative scope.
+
 ## When to iterate
 
 Do not change the plugin for every one-off project need. Use this order:
