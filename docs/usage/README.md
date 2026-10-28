@@ -63,6 +63,31 @@ Start from [case-template.md](case-template.md). Minimum fields:
 `xcode_build` returning `success:false` is a normal result, not a tool error.
 Track those separately.
 
+## Attribute every failure
+
+Keep four failure layers separate; otherwise the plugin gets blamed for
+infrastructure noise:
+
+| Layer | Examples | Plugin iteration? |
+|---|---|---|
+| Plugin | wrong action, missing capability, bad schema, misleading output | yes |
+| Xcode / project | App compile error, signing, missing SDK/runtime | usually no |
+| DSH core | file read-before-write policy, transport failure, approval flow | no, report separately |
+| Model | wrong tool choice, path copied incorrectly, malformed code | no, prompt/tool-description tuning |
+
+A build that returns `success:false` with a compiler error is Xcode/project data,
+not a plugin failure.
+
+## Seeded / continuation sessions
+
+A session with `isSeeded: true` or `parentSession` is a continuation of an
+existing project. It is valuable for observing follow-up friction, but it is
+**not a new independent case** for frequency counting.
+
+Count only the new turns (events after the seed) and keep the parent case link.
+The same project refactored twice must not inflate the evidence for a candidate
+iteration.
+
 ## When to iterate
 
 Do not change the plugin for every one-off project need. Use this order:
