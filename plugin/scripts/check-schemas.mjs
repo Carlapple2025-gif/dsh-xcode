@@ -205,6 +205,17 @@ for (const tool of tools) {
   }
 }
 
+// Regression: GetBuildLog issues carry a `task`, so xcode_build's filtered
+// errors/warnings must accept it too. This protects against the 0.1.0 bug where
+// a warning made the whole tool result fail output validation.
+const xcodeBuild = tools.find((tool) => tool.name === 'xcode_build')
+for (const key of ['errors', 'warnings']) {
+  const properties = xcodeBuild?.output?.schema?.properties?.[key]?.items?.properties
+  if (!isRecord(properties) || !isRecord(properties.task) || properties.task.type !== 'string') {
+    fail(`tools.xcode_build.output.schema.properties.${key}.items.properties.task`, 'must declare the optional string field emitted by GetBuildLog.')
+  }
+}
+
 const width = Math.max(...tools.map((tool) => tool.name.length), 11)
 for (const tool of tools) {
   const root = tool.parameters?.type ?? 'missing'

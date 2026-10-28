@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented here.
 
+## 0.1.1 — 2026-10-28
+
+Hotfix for build diagnostics.
+
+- Fixes `xcode_build` output validation when Xcode build-log warnings carry a
+  `task` field. `warnings[]` and `errors[]` now declare the optional `task`
+  property, so a successful build with warnings no longer fails as an invalid
+  tool result.
+- Adds a schema regression assertion for `warnings[].task` and
+  `errors[].task`.
+- Verified with a real `#warning` build: the warning is returned instead of the
+  whole result being rejected.
+
 ## 0.1.0 — 2026-10-27
 
 Initial public package.

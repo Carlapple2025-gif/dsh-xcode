@@ -149,7 +149,7 @@ class XcodeMCP {
         {
           protocolVersion: MCP_PROTOCOL,
           capabilities: {},
-          clientInfo: { name: 'dsh-xcode', version: '0.1.0' },
+          clientInfo: { name: 'dsh-xcode', version: '0.1.1' },
         },
         { timeoutMs: MCP_START_TIMEOUT_MS, signal },
       )
@@ -1130,6 +1130,7 @@ function makeBuildTool(mcp) {
               filePath: { type: 'string' },
               lineNumber: { type: 'integer' },
               severity: { type: 'string' },
+              task: { type: 'string' },
             },
           },
         },
@@ -1143,6 +1144,7 @@ function makeBuildTool(mcp) {
               filePath: { type: 'string' },
               lineNumber: { type: 'integer' },
               severity: { type: 'string' },
+              task: { type: 'string' },
             },
           },
         },
