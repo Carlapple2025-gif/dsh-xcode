@@ -15,3 +15,7 @@ node_modules/
 dist/
 *.tgz
 *.log
+
+# Raw usage traces and project-specific case notes stay local by default.
+docs/usage/cases/
+docs/usage/raw/

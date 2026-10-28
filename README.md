@@ -164,6 +164,13 @@ npm run check
 
 端到端测试使用 `Fixtures/XcodeAgentDemo`，需要 Xcode 已打开该工程并完成一次 external-agent 授权。
 
+## 使用数据与迭代
+
+真实会话的采集字段、脱敏规则和迭代判断标准见
+[docs/usage/README.md](docs/usage/README.md)。原始 session log 和项目相关案例卡默认
+只保留在本地，`docs/usage/cases/` 与 `docs/usage/raw/` 已加入 `.gitignore`，避免把
+App 源码、路径或业务数据带进公开仓库。
+
 ## 第三方 `mcpbridge-wrapper` 说明
 
 `mcpbridge-wrapper` 面向“严格 MCP 客户端与 Xcode 原生桥接之间的兼容层”问题。本插件自带一个最小 stdio 桥接客户端，直接连接官方 `xcrun mcpbridge`，并已在 Xcode 27.1 上完成真实工具调用，因此当前链路不依赖 wrapper。
