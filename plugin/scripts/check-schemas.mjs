@@ -19,8 +19,8 @@ import { isDeepStrictEqual } from 'node:util'
 
 import { apply } from '../index.js'
 
-const EXPECTED_TOOLS = ['xcode_context', 'xcode_build', 'xcode_test', 'xcode_run', 'xcode_simulator']
-const REQUIRED_ACTIONS = ['xcode_context', 'xcode_test', 'xcode_run', 'xcode_simulator']
+const EXPECTED_TOOLS = ['xcode_context', 'xcode_project', 'xcode_build', 'xcode_test', 'xcode_run', 'xcode_simulator']
+const REQUIRED_ACTIONS = ['xcode_context', 'xcode_project', 'xcode_test', 'xcode_run', 'xcode_simulator']
 const SCHEMA_TYPES = ['object', 'array', 'string', 'number', 'integer', 'boolean', 'null']
 const KEYWORDS = new Set([
   'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items',

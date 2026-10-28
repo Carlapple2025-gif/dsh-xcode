@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented here.
 
+## 0.2.0 — 2026-10-28
+
+Minimal project creation.
+
+- Adds `xcode_project` with two actions:
+  - `templates`: list/filter official Xcode project templates and inspect one
+    template's options
+  - `create`: create a new `.xcodeproj` from an official template, then open it
+- Project creation uses Xcode's official `XcodeListTemplates` and
+  `XcodeNewProject` tools; no hand-written `project.pbxproj`.
+- Template option metadata is read from Xcode's full template list artifact when
+  structured RPC content omits it.
+- Verified by creating a macOS SwiftUI app with Swift Testing and building the
+  generated project through `xcode_build`.
+
 ## 0.1.1 — 2026-10-28
 
 Hotfix for build diagnostics.

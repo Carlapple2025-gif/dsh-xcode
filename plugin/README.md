@@ -7,12 +7,13 @@ DSH Host 插件：让模型直接操作正在运行的 Xcode。底层使用 Appl
 | 工具 | 能做什么 |
 |---|---|
 | `xcode_context` | 查看 Xcode/MCP/权限状态；列出、打开工作区；查看 scheme、target、run destination、test plan；切换当前 scheme / destination / test plan |
+| `xcode_project` | 列出/筛选官方 Xcode 工程模板，查看模板选项；从模板创建 `.xcodeproj` 并自动打开 |
 | `xcode_build` | 用 Xcode 自己的构建系统构建当前 scheme，返回结构化错误/警告和完整日志路径 |
 | `xcode_test` | 列出测试；运行全部测试或指定 `targetName + testIdentifier`；返回通过/失败计数、失败详情、完整结果路径 |
 | `xcode_run` | 构建并运行 App；停止；读取 stdout/stderr/OSLog；渲染 SwiftUI `#Preview` 为 PNG；执行 LLDB 命令 |
 | `xcode_simulator` | 用 `simctl` 列出、启动、关闭模拟器，安装/启动/终止 App，截图，打开 URL |
 
-模型只看到 5 个高层工具，而不是 Xcode MCP 的 54 个原始工具，减少上下文占用。
+模型只看到 6 个高层工具，而不是 Xcode MCP 的 54 个原始工具，减少上下文占用。
 
 ## 安装
 
@@ -20,14 +21,14 @@ DSH Host 插件：让模型直接操作正在运行的 Xcode。底层使用 Appl
 
 ```text
 plugin_manager install_bundle
-  target: dsh-xcode@0.1.0
+  target: dsh-xcode@0.2.0
 ```
 
-从本地 tarball 安装：
+从 GitHub Release tarball 安装：
 
 ```text
 plugin_manager install_bundle
-  target: /absolute/path/to/dist/dsh-xcode-0.1.0.tgz
+  target: /absolute/path/to/dist/dsh-xcode-0.2.0.tgz
 ```
 
 本地开发时可以直接 link 包目录：
@@ -131,7 +132,7 @@ DSH model
 
 ### schema 冒烟检查
 
-插件自带一条零依赖检查：用 stub context 真正加载插件，断言 5 个工具注册出去的 JSON Schema。
+插件自带一条零依赖检查：用 stub context 真正加载插件，断言 6 个工具注册出去的 JSON Schema。
 
 ```bash
 cd plugin && npm run check      # 等价于 node scripts/check-schemas.mjs
@@ -139,10 +140,11 @@ cd plugin && npm run check      # 等价于 node scripts/check-schemas.mjs
 
 检查内容：
 
-- 工具名集合（`xcode_context` / `build` / `test` / `run` / `simulator`，不重名，不占用 `run_code`）；
+- 工具名集合（`context` / `project` / `build` / `test` / `run` / `simulator`，不重名，不占用 `run_code`）；
 - 参数根必须是 `type: "object"` + `properties`，属性表形式直接失败；
 - `required` 必须是数组、只引用已声明的属性、不重复；`action` 必填的工具固定为 `["action"]`；
 - `xcode_build.pattern` 是纯 `{ "type": "string" }`，不携带描述或嵌套对象；
+- `xcode_build` 的 errors/warnings 必须允许构建日志的 `task` 字段；
 - 关键字类型与位置符合 DSH 的 enforced subset（`type`/`oneOf`/`properties`/`required`/`additionalProperties`/`items`/`enum`/`const` + 注解）；
 - 每个工具都有非空 `description`；schema 可无损 JSON 序列化，注解（`description`/`title`）类型正确。
 

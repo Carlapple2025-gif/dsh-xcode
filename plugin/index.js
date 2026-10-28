@@ -9,7 +9,7 @@
  * @module dsh-xcode
  */
 
-import { access, mkdir, stat } from 'node:fs/promises'
+import { access, mkdir, readFile, stat } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
@@ -149,7 +149,7 @@ class XcodeMCP {
         {
           protocolVersion: MCP_PROTOCOL,
           capabilities: {},
-          clientInfo: { name: 'dsh-xcode', version: '0.1.1' },
+          clientInfo: { name: 'dsh-xcode', version: '0.2.0' },
         },
         { timeoutMs: MCP_START_TIMEOUT_MS, signal },
       )
@@ -328,7 +328,7 @@ class XcodeMCP {
     stdin.write(`${JSON.stringify(message)}\n`)
   }
 
-  async callTool(name, args = {}, { timeoutMs = 60_000, signal } = {}) {
+  async callToolRaw(name, args = {}, { timeoutMs = 60_000, signal } = {}) {
     await this.ensure(signal)
     const result = await this.requestRaw(
       'tools/call',
@@ -339,7 +339,11 @@ class XcodeMCP {
       const message = contentText(result) || `${name} failed inside Xcode.`
       throw new XcodeMCPError(message)
     }
-    return mcpValue(result)
+    return { value: mcpValue(result), content: contentText(result) }
+  }
+
+  async callTool(name, args = {}, options = {}) {
+    return (await this.callToolRaw(name, args, options)).value
   }
 
   rejectAll(error) {
@@ -1750,6 +1754,368 @@ function makeRunTool(mcp) {
   }
 }
 
+function parseTemplateList(text) {
+  const templates = []
+  let current
+  const value = (line) => line.slice(line.indexOf(':') + 1).trim()
+  for (const line of String(text).split(/\r?\n/)) {
+    if (line.startsWith('TEMPLATE_IDENTIFIER: ')) {
+      if (current) templates.push(current)
+      current = {
+        identifier: value(line),
+        name: '',
+        templateCategory: undefined,
+        platforms: [],
+        isMultiPlatform: false,
+        options: [],
+      }
+      continue
+    }
+    if (!current) continue
+    if (line.startsWith('TEMPLATE_NAME: ')) current.name = value(line)
+    else if (line.startsWith('TEMPLATE_CATEGORY: ')) current.templateCategory = value(line) || undefined
+    else if (line.startsWith('IS_MULTI_PLATFORM: ')) current.isMultiPlatform = value(line) === 'true'
+    else if (line.startsWith('PLATFORM: ')) {
+      const platform = value(line)
+      if (platform) current.platforms.push(platform)
+    } else if (line.startsWith('OPTION_IDENTIFIER: ')) {
+      current.option = { identifier: value(line), type: '', name: '', defaultValue: '', possibleValues: [] }
+      current.options.push(current.option)
+    } else if (line.startsWith('OPTION_NAME: ') && current.option) current.option.name = value(line)
+    else if (line.startsWith('OPTION_TYPE: ') && current.option) current.option.type = value(line)
+    else if (line.startsWith('OPTION_DEFAULT_VALUE: ') && current.option) {
+      current.option.defaultValue = value(line)
+    } else if (line.startsWith('OPTION_POSSIBLE_VALUES: ') && current.option) {
+      const possible = value(line)
+      current.option.possibleValues = possible ? possible.split(',').map((item) => item.trim()).filter(Boolean) : []
+    }
+  }
+  if (current) templates.push(current)
+  return templates
+}
+
+function makeProjectTool(mcp) {
+  return {
+    name: 'xcode_project',
+    description:
+      'Discover official Xcode project templates and create a new .xcodeproj from one, then open it. Actions: templates (list/filter project templates; set template to inspect one template’s options), create (create a project at an absolute destination and open the result). This tool does not edit an existing project. Xcode must be running; creating a project may trigger Xcode’s agent-folder approval.',
+    parameters: parameterSchema({
+      action: {
+        type: 'string',
+        required: true,
+        enum: ['templates', 'create'],
+        description: 'templates | create',
+      },
+      path: {
+        type: 'string',
+        description:
+          'For create: absolute destination directory. Xcode creates a <name>/ directory containing the .xcodeproj.',
+      },
+      name: {
+        type: 'string',
+        description: 'For create: productName / project name.',
+      },
+      template: {
+        type: 'string',
+        description:
+          'For create: required template identifier (e.g. com.apple.dt.unit.cocoaApplication). For templates: optional identifier/name filter and requests option details.',
+      },
+      organization: {
+        type: 'string',
+        description:
+          'For create: optional organization identifier prefix, e.g. com.example.',
+      },
+      platform: {
+        type: 'string',
+        description:
+          'For templates: optional platform filter, e.g. com.apple.platform.macosx.',
+      },
+      nameFilter: {
+        type: 'string',
+        description: 'For templates: optional template name filter.',
+      },
+      options: {
+        type: 'array',
+        description:
+          'For create: optional template options as key/value strings, e.g. [{key:"testingSystem",value:"Swift Testing"}]. Omit to use template defaults.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            key: { type: 'string', required: true },
+            value: { type: 'string', required: true },
+          },
+        },
+      },
+    }),
+    output: textOutput(
+      outputSchema({
+        action: { type: 'string', required: true },
+        summary: { type: 'string', required: true },
+        success: { type: 'boolean', required: true },
+        templates: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              identifier: { type: 'string', required: true },
+              name: { type: 'string', required: true },
+              category: { type: 'string' },
+              platforms: { type: 'array', items: { type: 'string' } },
+              optionIds: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+        templateDetails: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            identifier: { type: 'string', required: true },
+            name: { type: 'string', required: true },
+            category: { type: 'string' },
+            options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  id: { type: 'string', required: true },
+                  type: { type: 'string' },
+                  name: { type: 'string' },
+                  defaultValue: { type: 'string' },
+                  possibleValues: { type: 'array', items: { type: 'string' } },
+                },
+              },
+            },
+          },
+        },
+        totalTemplates: { type: 'integer' },
+        truncated: { type: 'boolean' },
+        fullListPath: { type: 'string' },
+        projectPath: { type: 'string' },
+        createdTargets: { type: 'array', items: { type: 'string' } },
+        workspace: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            id: { type: 'string', required: true },
+            path: { type: 'string' },
+          },
+        },
+        activeScheme: { type: 'string' },
+        activeDestination: { type: 'string' },
+        notes: { type: 'array', items: { type: 'string' } },
+      }),
+    ),
+    timeoutMs: 300_000,
+    isConcurrencySafe: () => false,
+    presentCall(args) {
+      return {
+        card: 'generic',
+        title: args.action === 'create' ? `Create Xcode project${args.name ? `: ${args.name}` : ''}` : 'List Xcode templates',
+        kind: 'execute',
+        rawInput: args,
+      }
+    },
+    async execute(args, exec) {
+      const action = String(args.action ?? '')
+      if (action === 'templates') {
+        const raw = await mcp.callToolRaw(
+          'XcodeListTemplates',
+          { kind: 'project' },
+          { timeoutMs: 120_000, signal: exec.signal },
+        )
+        let value = raw.value
+        // Some Xcode MCP versions omit the per-template `options` array from
+        // structuredContent while retaining it in the textual JSON payload.
+        try {
+          const parsed = JSON.parse(raw.content)
+          if (parsed && Array.isArray(parsed.templates)) value = { ...value, ...parsed }
+        } catch {
+          // The textual content was not JSON; keep structuredContent.
+        }
+        if (value.fullTemplateListPath) {
+          try {
+            const parsedList = parseTemplateList(await readFile(String(value.fullTemplateListPath), 'utf8'))
+            if (parsedList.length) value = { ...value, templates: parsedList }
+          } catch {
+            // The host is not allowed to read the artifact file; use the RPC payload.
+          }
+        }
+        const rawTemplates = Array.isArray(value.templates) ? value.templates : []
+        const platformNeedle = args.platform ? String(args.platform).toLowerCase() : ''
+        const nameNeedle = args.nameFilter ? String(args.nameFilter).toLowerCase() : ''
+        const filteredTemplates = rawTemplates.filter((template) => {
+          if (platformNeedle) {
+            const platforms = Array.isArray(template.platforms)
+              ? template.platforms.map((item) => String(item).toLowerCase())
+              : []
+            const match = platforms.some((item) => item.includes(platformNeedle) || platformNeedle.includes(item))
+            if (!match && template.isMultiPlatform !== true) return false
+          }
+          if (nameNeedle) {
+            const label = String(template.name ?? template.templateName ?? '').toLowerCase()
+            if (!label.includes(nameNeedle)) return false
+          }
+          return true
+        })
+        const templates = filteredTemplates.slice(0, 60).map((template) => ({
+          identifier: String(template.identifier ?? ''),
+          name: String(template.name ?? template.templateName ?? template.identifier ?? ''),
+          category: template.templateCategory ? String(template.templateCategory) : undefined,
+          platforms: Array.isArray(template.platforms)
+            ? template.platforms.map((item) => String(item)).filter((item) => item !== '(any)')
+            : [],
+          optionIds: Array.isArray(template.options)
+            ? template.options.map((option) => String(option.identifier ?? '')).filter(Boolean)
+            : [],
+        }))
+        let templateDetails
+        if (args.template) {
+          const requested = String(args.template).toLowerCase()
+          const match = rawTemplates.find(
+            (template) =>
+              String(template.identifier).toLowerCase() === requested ||
+              String(template.templateName).toLowerCase() === requested,
+          )
+          if (match) {
+            templateDetails = {
+              identifier: String(match.identifier),
+              name: String(match.name ?? match.templateName ?? match.identifier),
+              category: match.templateCategory ? String(match.templateCategory) : undefined,
+              options: Array.isArray(match.options)
+                ? match.options.map((option) => ({
+                    id: String(option.identifier ?? ''),
+                    type: option.type ? String(option.type) : undefined,
+                    name: option.name ? String(option.name) : undefined,
+                    defaultValue:
+                      option.defaultValue === undefined ? undefined : String(option.defaultValue),
+                    possibleValues: Array.isArray(option.possibleValues)
+                      ? option.possibleValues.map((item) => String(item))
+                      : undefined,
+                  }))
+                : [],
+            }
+          }
+        }
+        const notes = []
+        if (args.template && !templateDetails) {
+          notes.push(`No template matched ${JSON.stringify(String(args.template))}.`)
+        }
+        const lines = [
+          `Project templates (${filteredTemplates.length})${args.platform ? ` on ${args.platform}` : ''}${args.nameFilter ? ` matching ${JSON.stringify(String(args.nameFilter))}` : ''}:`,
+          ...templates.slice(0, 25).map(
+            (template) =>
+              `- ${template.identifier} — ${template.name}${template.platforms?.length ? ` [${template.platforms.join(', ')}]` : ''}`,
+          ),
+          templates.length > 25 ? `… ${templates.length - 25} more in this page` : null,
+          templateDetails
+            ? [
+                `Template options for ${templateDetails.identifier}:`,
+                ...(templateDetails.options ?? []).map(
+                  (option) =>
+                    `- ${option.id} (${option.type ?? 'option'})${option.defaultValue !== undefined ? ` default=${JSON.stringify(option.defaultValue)}` : ''}${option.possibleValues?.length ? ` values=${option.possibleValues.map((item) => JSON.stringify(item)).join('|')}` : ''}`,
+                ),
+              ].join('\n')
+            : null,
+          'Use action="create" with template/path/name. Set template on this action to inspect its options.',
+          value.fullTemplateListPath ? `Full template list: ${value.fullTemplateListPath}` : null,
+          ...notes,
+        ].filter(Boolean)
+        return {
+          action,
+          summary: lines.join('\n'),
+          success: true,
+          templates,
+          templateDetails,
+          totalTemplates: filteredTemplates.length,
+          truncated: Boolean(value.truncated) || filteredTemplates.length > 60,
+          fullListPath: value.fullTemplateListPath,
+          notes,
+        }
+      }
+
+      if (action === 'create') {
+        if (!args.path) throw new Error('xcode_project action="create" requires path=<absolute destination directory>.')
+        if (!isAbsolute(args.path)) throw new Error('path must be an absolute destination directory.')
+        if (!args.name) throw new Error('xcode_project action="create" requires name=<product name>.')
+        if (!args.template) throw new Error('xcode_project action="create" requires template=<template identifier>.')
+        const destinationPath = resolve(args.path)
+        const existing = await stat(destinationPath).catch(() => null)
+        if (existing && !existing.isDirectory()) {
+          throw new Error(`Destination is not a directory: ${destinationPath}`)
+        }
+        if (!existing) await mkdir(destinationPath, { recursive: true })
+
+        const options = {}
+        if (Array.isArray(args.options)) {
+          for (const option of args.options) {
+            if (!option || !option.key) throw new Error('Each options entry requires key and value.')
+            const key = String(option.key)
+            if (Object.hasOwn(options, key)) throw new Error(`Duplicate template option key: ${key}`)
+            options[key] = String(option.value ?? '')
+          }
+        }
+
+        const created = await mcp.callTool(
+          'XcodeNewProject',
+          {
+            templateIdentifier: String(args.template),
+            productName: String(args.name),
+            destinationPath,
+            ...(args.organization ? { organizationIdentifier: String(args.organization) } : {}),
+            ...(Object.keys(options).length ? { options } : {}),
+          },
+          { timeoutMs: 300_000, signal: exec.signal },
+        )
+        const projectPath = String(created.projectPath ?? '')
+        if (!projectPath) throw new Error('Xcode created no projectPath.')
+        const createdTargets = Array.isArray(created.createdTargets)
+          ? created.createdTargets.map((item) => String(item))
+          : []
+        const notes = []
+        let workspace
+        let activeScheme
+        let activeDestination
+        try {
+          const opened = await mcp.callTool(
+            'XcodeOpenWorkspace',
+            { path: projectPath },
+            { timeoutMs: 180_000, signal: exec.signal },
+          )
+          workspace = { id: String(opened.workspaceIdentifier), path: opened.workspacePath ? String(opened.workspacePath) : projectPath }
+          activeScheme = opened.activeScheme ? String(opened.activeScheme) : undefined
+          activeDestination = opened.activeRunDestination ? String(opened.activeRunDestination) : undefined
+        } catch (error) {
+          notes.push(`Project created but could not open it: ${error.message}`)
+        }
+        const lines = [
+          `Created ${args.name} at ${projectPath}`,
+          `Targets: ${createdTargets.length ? createdTargets.join(', ') : args.template}`,
+          workspace ? `Workspace: ${workspace.id}` : null,
+          activeScheme ? `Scheme: ${activeScheme}` : null,
+          activeDestination ? `Destination: ${activeDestination}` : null,
+          ...notes,
+        ].filter(Boolean)
+        return {
+          action,
+          summary: lines.join('\n'),
+          success: true,
+          projectPath,
+          createdTargets,
+          workspace,
+          activeScheme,
+          activeDestination,
+          notes,
+        }
+      }
+
+      throw new Error(`Unknown xcode_project action: ${action}`)
+    },
+  }
+}
+
 function makeSimulatorTool(ctx) {
   return {
     name: 'xcode_simulator',
@@ -1975,6 +2341,7 @@ export function apply(ctx) {
   const mcp = new XcodeMCP(ctx)
   const tools = [
     makeContextTool(ctx, mcp),
+    makeProjectTool(mcp),
     makeBuildTool(mcp),
     makeTestTool(mcp),
     makeRunTool(mcp),
