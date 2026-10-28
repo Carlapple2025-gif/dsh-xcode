@@ -14,7 +14,8 @@ the final "write a case card" turn is part of the same case.
 | `xcode_test` (macOS) | **pass** | probe: 6 calls, 12 runs, final 5/5; real app: 6/6 after P1 | validated |
 | `xcode_run` non-preview | **partial** | real app launch + console pass; debugger not covered | collect debugger |
 | Clean / Release configuration / analyze | **unsupported** | plugin has no clean/configuration/analyze; CLI used | candidate |
-| Real-app release audit | **partial** | P1 test target + notification fixed; P0 signing blocked | app work, not plugin |
+| Real-app release audit | **partial** | P1 test target + notification fixed; P2 CI/privacy/version added; P0 signing blocked | app work, not plugin |
+| CI / privacy / version | **pass** | CI green on Xcode 26.6; PrivacyInfo in bundle; app=plugin=0.2.3, schema 1 | app release hygiene |
 | `xcode_simulator` end-to-end | **blocked** | zero runtimes; list empty, rest domain errors | environment |
 | Swift Package input | **unsupported** | 6/7 xcode_* calls rejected at validation layer | candidate |
 | Archive / export / signing | **blocked + shell-only** | no identity/team; no plugin tools | candidate |
@@ -56,7 +57,8 @@ the final "write a case card" turn is part of the same case.
 - P1 test target + notification state were fixed in the app; P0 Developer ID
   signing and notarization remain blocked by credentials.
 - CI, `PrivacyInfo.xcprivacy`, and version checks were added to the app repo;
-  these are app hygiene, not dsh-xcode capabilities.
+  these are app hygiene, not dsh-xcode capabilities. CI is green on a hosted
+  Xcode 26.6 runner after guarding a 27-only glass API.
 
 ### Negative controls
 
